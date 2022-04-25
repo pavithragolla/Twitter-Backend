@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Caching.Memory;
 using Twitter_task.DTOs;
 using Twitter_task.Models;
 using Twitter_task.Repositories;
@@ -97,12 +98,17 @@ public class PostController : ControllerBase
 
      [HttpGet]
 
-      public async Task<ActionResult<List<Post>>> GetAllTodos()
+      public async Task<ActionResult<List<Post>>> GetAllTodos([FromQuery] int Limit, int PageNumber)
       {
-          var allTodos = await _post.GetAllPost();
+
+
+          var allTodos = await _post.GetAllPost(Limit, PageNumber);
 
           return Ok(allTodos);
       }
+
+
+
        [HttpGet("{Id}")]
 
       public async Task<ActionResult<Post>> GetByPostId(int Id)

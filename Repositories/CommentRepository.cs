@@ -1,4 +1,5 @@
 using Dapper;
+using Microsoft.Extensions.Caching.Memory;
 using task.Repositories;
 using Twitter_task.Models;
 using Twitter_task.utilities;
@@ -9,14 +10,18 @@ public interface ICommentRepository
 {
      Task<Comment> Create(Comment Item);
     Task Delete(int Id);
-    Task<List<Comment>> GetAllComment(int PostId);
+    Task<List<Comment>> GetAllComment(int PostId, int Limit, int PageNumber);
     Task<Comment> GetByComments(int Id);
 
 }
 public class CommentRepository : BaseRepository, ICommentRepository
 {
-    public CommentRepository(IConfiguration configuration) : base(configuration)
+    private readonly IMemoryCache _memoryCache;
+
+    public CommentRepository(IConfiguration configuration, IMemoryCache memoryCache) : base(configuration)
     {
+        _memoryCache = memoryCache;
+
     }
 
     public async Task<Comment> Create(Comment Item)
@@ -40,11 +45,19 @@ public class CommentRepository : BaseRepository, ICommentRepository
         }
     }
 
-    public async Task<List<Comment>> GetAllComment(int PostId)
+    public async Task<List<Comment>> GetAllComment(int PostId, int Limit, int PageNumber)
     {
-     var query = $@"SELECT * FROM ""{TableNames.comment}"" WHERE post_id = @PostId ORDER BY Id";
+         var Postmem = _memoryCache.Get<List<Comment>>(key: $"comment {Limit} : {PageNumber}");
+        if (Postmem is null)
+        {
+        var query = $@"SELECT * FROM ""{TableNames.comment}"" WHERE post_id = @PostId
+            ORDER BY Id OFFSET @PageNumber
+	        LIMIT @Limit";
         using (var con = NewConnection)
-             return (await con.QueryAsync<Comment>(query, new { PostId })).AsList();
+            Postmem = (await con.QueryAsync<Comment>(query, new { PostId, @PageNumber = (PageNumber-1)*Limit,Limit })).AsList();
+          _memoryCache.Set(key:"comment",Postmem, TimeSpan.FromMinutes(value:1));
+        }
+        return Postmem;
     }
 
     public async Task<Comment> GetByComments(int Id)

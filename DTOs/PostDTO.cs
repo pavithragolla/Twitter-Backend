@@ -18,6 +18,7 @@ public record PostCreateDTO
 }
 public record PostUpdateDTO
 {
+      [JsonPropertyName("title")]
     public string Title { get; set; }
 
     // public DateTimeOffset UpdatedAt { get; set; }

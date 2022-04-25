@@ -1,4 +1,5 @@
 using Dapper;
+using Microsoft.Extensions.Caching.Memory;
 using task.Repositories;
 using Twitter_task.Models;
 using Twitter_task.utilities;
@@ -10,19 +11,25 @@ public interface IPostRepository
     Task<Post> Create(Post Item);
     Task Update(Post Item);
     Task Delete(int Id);
-    Task<List<Post>> GetAllPost();
+    Task<List<Post>> GetAllPost(int Limit, int PageNumber);
     Task<Post> GetById(int Id);
     Task<List<Post>> GetPostByuserId(int UserIde);
 }
 
 public class PostRepository : BaseRepository, IPostRepository
 {
-    public PostRepository(IConfiguration configuration) : base(configuration)
+    private readonly IMemoryCache _memoryCache;
+
+
+    public PostRepository(IConfiguration configuration, IMemoryCache memoryCache) : base(configuration)
     {
+        _memoryCache = memoryCache;
+
     }
 
     public async Task<Post> Create(Post Item)
     {
+
         var query = $@"INSERT INTO {TableNames.post} (title, user_id) VALUES(@Title, @UserId) ";
          using (var connection = NewConnection)
         {
@@ -41,11 +48,19 @@ public class PostRepository : BaseRepository, IPostRepository
         }
     }
 
-    public async Task<List<Post>> GetAllPost()
+    public async Task<List<Post>> GetAllPost(int Limit, int PageNumber)
     {
-          var query = $@"SELECT * FROM {TableNames.post} ORDER BY Id";
+        var Postmem = _memoryCache.Get<List<Post>>(key: $"post {Limit} : {PageNumber}");
+        if (Postmem is null)
+        {
+          var query = $@"SELECT * FROM {TableNames.post} ORDER BY Id OFFSET @PageNumber
+	LIMIT @Limit";
+
         using (var con = NewConnection)
-             return (await con.QueryAsync<Post>(query)).AsList();
+           Postmem = (await con.QueryAsync<Post>(query, new {@PageNumber = (PageNumber-1)*Limit,Limit})).AsList();
+          _memoryCache.Set(key:"post",Postmem, TimeSpan.FromMinutes(value:1));
+        }
+        return Postmem;
     }
 
     public async Task<Post> GetById(int Id)

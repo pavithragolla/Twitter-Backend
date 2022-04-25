@@ -1,4 +1,5 @@
 using Dapper;
+using Microsoft.Extensions.Caching.Memory;
 using task.Repositories;
 using Twitter_task.Models;
 using Twitter_task.utilities;
@@ -15,8 +16,11 @@ public interface IUserRepository
 
 public class UserRepository : BaseRepository, IUserRepository
 {
-    public UserRepository(IConfiguration configuration) : base(configuration)
+    private readonly IMemoryCache _memoryCache;
+
+    public UserRepository(IConfiguration configuration, IMemoryCache memoryCache) : base(configuration)
     {
+        _memoryCache = memoryCache;
     }
 
     public async Task<User> Create(User Item)
@@ -31,9 +35,15 @@ public class UserRepository : BaseRepository, IUserRepository
 
     public async Task<User> GetByEmail(string Email)
     {
+        var Postmem = _memoryCache.Get<User>(key: $"user {Email}");
+        if (Postmem is null)
+        {
         var query = $@"SELECT * FROM ""{TableNames.user}"" WHERE email = @Email";
          using (var con = NewConnection)
-     return await con.QuerySingleOrDefaultAsync<User>(query, new { Email });
+           Postmem = await con.QuerySingleOrDefaultAsync<User>(query, new { Email });
+          _memoryCache.Set(key:"user",Postmem, TimeSpan.FromMinutes(value:1));
+        }
+        return Postmem;
     }
 
     public async Task<User> GetById(int Id)
@@ -41,7 +51,8 @@ public class UserRepository : BaseRepository, IUserRepository
         var query = $@"SELECT * FROM""{TableNames.user}"" WHERE id= @Id";
          using (var con = NewConnection)
              return await con.QuerySingleOrDefaultAsync<User>(query, new { Id });
-    }
+        }
+
 
     public async Task Update(User Item)
     {
